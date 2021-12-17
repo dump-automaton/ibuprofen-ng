@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ibuprofen-ng</title>
+  <link rel="stylesheet" href="https://unpkg.com/primitive-ui/dist/css/main.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fast-xml-parser/4.0.0-beta.8/fxparser.js" integrity="sha512-trjtAslTd5SucrKDBtzLObXRkh4a3LvsURBx3fH8uw9w5Fhx6Kx2vBCcER149+3iMJZm8lRrhUOZ8z63HgyNEA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/he/1.2.0/he.min.js" integrity="sha512-PEsccDx9jqX6Dh4wZDCnWMaIO3gAaU0j46W//sSqQhUQxky6/eHZyeB3NrXD2xsyugAKd4KPiDANkcuoEa2JuA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script>
+const withAttrParser = new fxparser.XMLParser({
+    ignoreAttributes : false,
+    attributeNamePrefix : "",
+    textNodeName: "textName",
+});
+const noAttrParser = new fxparser.XMLParser({ignoreAttributes : true});
+
+function getSoapRequestBody(action, params) {
+    let res = `<v:Envelope xmlns:v="http://schemas.xmlsoap.org/soap/envelope/" xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns:d="http://www.w3.org/2001/XMLSchema" xmlns:c="http://schemas.xmlsoap.org/soap/encoding/">
+    <v:Header/>
+    <v:Body>
+        <${action} xmlns="http://webservice.myi.cn/wmstudyservice/wsdl/" id="o0" c:root="1">`;
+    for (let key in params) {
+        res += `
+            <${key} i:type="d:${typeof params[key]}">${params[key]}</${key}>`
+    }
+    res += `
+        </${action}>
+    </v:Body></v:Envelope>`;
+    return res;
+}
+
+class SchoolSession {
+    constructor(origin = '') {
+        this.restfulURL = `${origin}/restful`
+        this.soapURL = `${origin}/wmexam/wmstudyservice.WSDL`
+    }
+
+    async soapRequest(action, params) {
+        let response = await fetch(this.soapURL, {
+            method: 'POST',
+            headers: {
+                'SOAPAction': 'http://webservice.myi.cn/wmstudyservice/wsdl/' + action,
+                'Content-Type': 'text/xml;charset=utf-8',
+                'Accept-Encoding': 'gzip',
+                'Cookie': 'userguid=ffffffffffffffffffffffffffffffff'
+            },
+            body: getSoapRequestBody(action, params),
+        })
+        return he.decode(await response.text())
+    }
+
+    async upload_to_temp_storage(filename, data) {
+        return (await fetch(`https://${this.host}/PutTemporaryStorage?filename=${filename}`, {
+            method: 'POST',
+            body: data,
+        })).ok
+    }
+
+    async getUserInfo(uid) {
+        let user = {
+            uid: uid,
+            userguid: noAttrParser.parse(await this.soapRequest('UsersGetUserGUID', {
+                'lpszUserName': uid
+            }))["SOAP-ENV:Envelope"]["SOAP-ENV:Body"]["AS:UsersGetUserGUIDResponse"]["AS:szUserGUID"],
+        };
+        Object.assign(user, JSON.parse(noAttrParser.parse(await this.soapRequest('UsersGetUserInfoByGUID', {
+            'szUserGUID': user.userguid,
+        }))["SOAP-ENV:Envelope"]["SOAP-ENV:Body"]["AS:UsersGetUserInfoByGUIDResponse"]["AS:szUserInfoJson"]))
+        user.classes.forEach(clz => clz.__proto__ = UserClass.prototype)
+        return user
+    }
+
+    async lessonsScheduleGetTableData(userid, userClassGuid, userClassRecords = []) {
+        let szReturnXML = 'enablesegment=3;'
+        userClassRecords.forEach(record => szReturnXML += record.guid + '=' + record.syn_timestamp + ';')
+        let result = noAttrParser.parse(await this.soapRequest('LessonsScheduleGetTableData', {
+            'lpszTableName': 'lessonsschedule',
+            'lpszUserClassGUID': userClassGuid,
+            'lpszStudentID': userid,
+            'lpszLastSyncTime': '',
+            'szReturnXML': szReturnXML,
+        }))
+        return result["SOAP-ENV:Envelope"]["SOAP-ENV:Body"]["AS:LessonsScheduleGetTableDataResponse"]["AS:szReturnXML"].LessonsScheduleRecordData.Record
+    }
+
+    async getResourceByGUID(resourceGUID) {
+        return withAttrParser.parse(await this.soapRequest('GetResourceByGUID', {
+            'lpszResourceGUID': resourceGUID
+        }))["SOAP-ENV:Envelope"]["SOAP-ENV:Body"]["AS:GetResourceByGUIDResponse"]["AS:szXMLContent"]
+    }
+}
+const defaultSchoolSession = new SchoolSession()
+
+class UserClass {
+    constructor(guid, name) {
+        this.guid = guid
+        this.name = name
+    }
+
+    async fetchNewLessonSchedulesRecords(user, schoolSession = defaultSchoolSession) {
+        if (this.records == undefined) {
+            this.records = []
+        }
+        let newRecords = []
+        while (true) {
+            newRecords = await schoolSession.lessonsScheduleGetTableData(user.uid, this.guid, this.records)
+            if (!newRecords) {
+                break
+            }
+            this.records.push(...newRecords)
+        }
+        return this.records
+    }
+}
+  </script>
+  <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+
+  <!-- Don't use this in production: -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+
+    const NameForm = ({ onSubmitValue }) => {
+      const [value, setValue] = React.useState('');
+
+      const handleChange = (event) => {
+        setValue(event.target.value);
+      }
+
+      const handleSubmit = (event) => {
+        onSubmitValue(value);
+        event.preventDefault();
+      }
+
+      return (
+        <form onSubmit={handleSubmit}>
+          <label>
+            User Name: (123456 / 123456@example.lexuewang.cn:8003)
+            <input type="text" value={value} onChange={handleChange} />
+          </label>
+          <input className="full-button" type="submit" value="Submit" />
+        </form>
+      );
+    }
+
+    function Select({
+      values,
+      callback,
+      disabled = false,
+      readonly = false,
+      selected
+    }) {
+      const [current, setCurrent] = React.useState(selected);
+      const handleChange = ({ target: { value } }) => {
+        setCurrent(value);
+        callback(value);
+      };
+      return (
+        <select
+          value={current}
+          disabled={disabled}
+          readOnly={readonly}
+          onChange={handleChange}
+        >
+          {values.map( ([value, text]) => (
+            <option value={value} key={value}>
+              {text}
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    function useOnScreen(ref) {
+      const [isOnScreen, setIsOnScreen] = React.useState(false);
+      const observerRef = React.useRef(null);
+
+      React.useEffect(() => {
+        observerRef.current = new IntersectionObserver(([entry]) => {
+          setIsOnScreen(entry.isIntersecting);
+          if (entry.isIntersecting) {
+            observerRef.current.unobserve(ref.current);
+          }
+        });
+      }, []);
+
+      React.useEffect(() => {
+        observerRef.current.observe(ref.current);
+
+        return () => {
+          observerRef.current.disconnect();
+        };
+      }, [ref]);
+
+      return isOnScreen;
+    }
+
+    const ClassLessonRecord = ({resourceGUID}) => {
+      const elementRef = React.useRef(null);
+      const [isOnScreen, setIsOnScreen] = React.useState(false);
+      const [resource, setResource] = React.useState(false);
+      const into = new IntersectionObserver(async ([entry]) => {
+        if (entry.isIntersecting) {
+          into.unobserve(elementRef.current)
+          document.cookie = "userguid=ffffffffffffffffffffffffffffffff"
+          if (resource) {
+            console.warn('?')
+            return
+          }
+          let resource = await defaultSchoolSession.getResourceByGUID(resourceGUID)
+          if (Array.isArray(resource.wmStudy.LessonsPrepare.RefrenceResource.Resource)) {
+            for (let Resource of resource.wmStudy.LessonsPrepare.RefrenceResource.Resource) {
+              Resource = await defaultSchoolSession.getResourceByGUID(Resource.guid)
+            }
+          } else {
+            resource.wmStudy.LessonsPrepare.RefrenceResource.Resource = await defaultSchoolSession.getResourceByGUID(resource.wmStudy.LessonsPrepare.RefrenceResource.Resource.guid)
+          }
+          setResource(resource)
+          setIsOnScreen(true)
+        }
+      })
+      React.useEffect(() => {
+        into.observe(elementRef.current)
+      }, [])
+      return (
+        <li ref={elementRef}>{isOnScreen ? (resource.wmStudy.LessonsPrepare.title ? resource.wmStudy.LessonsPrepare.title : 'Failed to load') : resourceGUID}</li>
+      )
+    }
+
+    class App extends React.Component {
+      state = {
+        selectClassIndex: 0,
+      };
+
+      handleLogin = async (uid) => {
+        let user = await defaultSchoolSession.getUserInfo(uid.split('@')[0]);
+        await user.classes[0].fetchNewLessonSchedulesRecords(user);
+        this.setState({
+          user: user,
+        })
+      }
+
+      render() {
+        if (!this.state.user) {
+          return (
+            <div className="container">
+              <NameForm onSubmitValue={this.handleLogin}/>
+            </div>
+          )
+        }
+        const { user, selectClassIndex } = this.state
+        return (
+          <div className="container">
+            <p>Hi, {user.realname}</p>
+            <Select values={user.classes.map((clz, index) => [index, clz.name])} callback={async (index) => {
+              await user.classes[index].fetchNewLessonSchedulesRecords(user);
+              this.setState({selectClassIndex: index})
+            }}></Select>
+            <ul>
+              {(user.classes[selectClassIndex].records.map((record, index) => <ClassLessonRecord key={record.guid} resourceGUID={record.resourceguid} />)).reverse()}
+            </ul>
+          </div>
+        )
+      }
+    }
+    ReactDOM.render(
+      <React.StrictMode><App /></React.StrictMode>,
+      document.getElementById('root')
+    );
+  </script>
+  <!--
+      Note: this page is a great way to try React but it's not suitable for production.
+      It slowly compiles JSX with Babel in the browser and uses a large development build of React.
+
+      Read this section for a production-ready setup with JSX:
+      https://reactjs.org/docs/add-react-to-a-website.html#add-jsx-to-a-project
+
+      In a larger project, you can use an integrated toolchain that includes JSX instead:
+      https://reactjs.org/docs/create-a-new-react-app.html
+
+      You can also use React without JSX, in which case you can remove Babel:
+      https://reactjs.org/docs/react-without-jsx.html
+    -->
+</body>
+
+</html>
