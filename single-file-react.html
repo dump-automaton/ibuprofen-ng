@@ -141,8 +141,8 @@ class UserClass {
       return (
         <form onSubmit={handleSubmit}>
           <label>
-            User Name: (123456 / 123456@example.lexuewang.cn:8003)
-            <input type="text" value={value} onChange={handleChange} />
+            用户名
+            <input type="text" value={value} onChange={handleChange} placeholder="123456" />
           </label>
           <input className="full-button" type="submit" value="Submit" />
         </form>
@@ -251,13 +251,15 @@ class UserClass {
           return (
             <div className="container">
               <NameForm onSubmitValue={this.handleLogin}/>
+              <p><a href="https://github.com/Richard-Zheng/ibuprofen-ng">源代码</a></p>
             </div>
           )
         }
         const { user, selectClassIndex } = this.state
         return (
           <div className="container">
-            <p>Hi, {user.realname}</p>
+            <h1>ibuprofen-ng</h1>
+            <p>你好, {user.realname}</p>
             <Select values={user.classes.map((clz, index) => [index, clz.name])} callback={async (index) => {
               await user.classes[index].fetchNewLessonSchedulesRecords(user);
               this.setState({selectClassIndex: index})

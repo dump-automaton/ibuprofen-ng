@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ibuprofen-ng</title>
+  <link rel="stylesheet" href="https://unpkg.com/primitive-ui/dist/css/main.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>ibuprofen loader</h1>
+    <label for="text">服务器</label>
+    <input type="text" name="serverhost" id="serverhostinput" placeholder="example.lexuewang.cn:8003">
+    <input onclick="onUpload(this)" type="submit" value="提交" class="full-button">
+  </div>
+</body>
+<script>
+  const serverHostInput = document.getElementById("serverhostinput")
+
+  async function onUpload(buttonElement) {
+    await fetch(`https://${serverHostInput.value}/PutTemporaryStorage?filename=ibuprofen-ng.html`, {
+      method: 'POST',
+      body: await (await fetch("https://cdn.jsdelivr.net/gh/Richard-Zheng/ibuprofen-ng/single-file-react.html")).text(),
+      mode: 'no-cors',
+    })
+    window.location.href = `https://${serverHostInput.value}/GetTemporaryStorage?filename=ibuprofen-ng.html`
+  }
+</script>
