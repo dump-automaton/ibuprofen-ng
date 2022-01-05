@@ -9,10 +9,11 @@
 </head>
 <body>
   <div class="container">
-    <h1>ibuprofen loader</h1>
+    <h1>ibuprofen-ng 加载器</h1>
     <label for="text">服务器</label>
     <input type="text" name="serverhost" id="serverhostinput" placeholder="example.lexuewang.cn:8003">
     <input onclick="onUpload(this)" type="submit" value="提交" class="full-button">
+    <p><a href="https://github.com/Richard-Zheng/ibuprofen-ng">源代码</a></p>
   </div>
 </body>
 <script>
@@ -21,7 +22,7 @@
   async function onUpload(buttonElement) {
     await fetch(`https://${serverHostInput.value}/PutTemporaryStorage?filename=ibuprofen-ng.html`, {
       method: 'POST',
-      body: await (await fetch("https://cdn.jsdelivr.net/gh/Richard-Zheng/ibuprofen-ng/single-file-react.html")).text(),
+      body: await (await fetch("single-file-react.html")).text(),
       mode: 'no-cors',
     })
     window.location.href = `https://${serverHostInput.value}/GetTemporaryStorage?filename=ibuprofen-ng.html`
