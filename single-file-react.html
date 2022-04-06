@@ -86,9 +86,13 @@ class SchoolSession {
     }
 
     async getResourceByGUID(resourceGUID) {
+      try {
         return withAttrParser.parse(await this.soapRequest('GetResourceByGUID', {
             'lpszResourceGUID': resourceGUID
         }))["SOAP-ENV:Envelope"]["SOAP-ENV:Body"]["AS:GetResourceByGUIDResponse"]["AS:szXMLContent"]
+      } catch (error) {
+        return null
+      }
     }
 }
 const defaultSchoolSession = new SchoolSession()
@@ -214,12 +218,12 @@ class UserClass {
             return
           }
           let resource = await defaultSchoolSession.getResourceByGUID(resourceGUID)
-          if (Array.isArray(resource.wmStudy.LessonsPrepare.RefrenceResource.Resource)) {
-            for (let Resource of resource.wmStudy.LessonsPrepare.RefrenceResource.Resource) {
-              Resource = await defaultSchoolSession.getResourceByGUID(Resource.guid)
+          if (resource.wmStudy.LessonsPrepare.RefrenceResource.Resource) {
+            if (Array.isArray(resource.wmStudy.LessonsPrepare.RefrenceResource.Resource)) {
+              resource.wmStudy.LessonsPrepare.RefrenceResource.Resource = await Promise.all(resource.wmStudy.LessonsPrepare.RefrenceResource.Resource.map((resource) => defaultSchoolSession.getResourceByGUID(resource.guid)))
+            } else {
+              resource.wmStudy.LessonsPrepare.RefrenceResource.Resource = [await defaultSchoolSession.getResourceByGUID(resource.wmStudy.LessonsPrepare.RefrenceResource.Resource.guid)]
             }
-          } else {
-            resource.wmStudy.LessonsPrepare.RefrenceResource.Resource = await defaultSchoolSession.getResourceByGUID(resource.wmStudy.LessonsPrepare.RefrenceResource.Resource.guid)
           }
           setResource(resource)
           setIsOnScreen(true)
@@ -228,9 +232,18 @@ class UserClass {
       React.useEffect(() => {
         into.observe(elementRef.current)
       }, [])
-      return (
-        <li ref={elementRef}>{isOnScreen ? (resource.wmStudy.LessonsPrepare.title ? resource.wmStudy.LessonsPrepare.title : 'Failed to load') : resourceGUID}</li>
-      )
+      try {
+        return (
+          <li ref={elementRef}>
+            {resource.wmStudy.LessonsPrepare.title}
+            {resource.wmStudy.LessonsPrepare.RefrenceResource.Resource.map((resource) => <div key={resource.wmStudy.GUID}><a href={resource.wmStudy.Resource.Content.fileURI}>{resource.wmStudy.Resource.title}</a><br/></div>)}
+          </li>
+        )
+      } catch (e) {
+        return (
+          <li ref={elementRef}>{resourceGUID}</li>
+        )
+      }
     }
 
     class App extends React.Component {
